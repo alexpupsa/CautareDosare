@@ -9,6 +9,7 @@ Data        21.12.2012
 Descriere:  Prima versiune
  */
 using Newtonsoft.Json;
+using PortalWSClient.Model;
 using PortalWSClient.PortalWS;
 using System;
 using System.Collections.Generic;
@@ -22,6 +23,8 @@ namespace PortalWSClient
     public partial class Form1 : Form
     {
         private List<string> names = new List<string>();
+        private List<string> errors = new List<string>();
+        private int countJson = 0;
 
         public Form1()
         {
@@ -29,27 +32,41 @@ namespace PortalWSClient
         }
 
 
-        private string FindDosareByName(string firstName, string lastName)
+        private DosareResult FindDosareByName(string firstName, string lastName)
         {
-            Query ws = new Query();
-            Dosar[] dosare = ws.CautareDosare(null, null, lastName, null, null, null);
-
-            List<Dosar> results = new List<Dosar>();
-
-            foreach (var dosar in dosare)
+            try
             {
-                var found = dosar.parti.Any(x => x.nume.ToLower().Contains(lastName.ToLower()) && x.nume.ToLower().Contains(firstName.ToLower()));
-                if (found)
+                Query ws = new Query();
+                Dosar[] dosare = ws.CautareDosare(null, null, lastName, null, null, null);
+
+                List<Dosar> results = new List<Dosar>();
+
+                foreach (var dosar in dosare)
                 {
-                    results.Add(dosar);
+                    var found = dosar.parti.Any(x => x.nume.ToLower().Contains(lastName.ToLower()) && x.nume.ToLower().Contains(firstName.ToLower()));
+                    if (found)
+                    {
+                        results.Add(dosar);
+                    }
                 }
-            }
 
-            if (results.Any())
-            {
-                return JsonConvert.SerializeObject(results, Formatting.Indented);
+                if (results.Any())
+                {
+                    return new DosareResult
+                    {
+                        Json = JsonConvert.SerializeObject(results, Formatting.Indented)
+                    };
+                }
+
+                return null;
             }
-            return null;
+            catch (Exception ex)
+            {
+                return new DosareResult
+                {
+                    Error = ex.ToString()
+                };
+            }
         }
 
         private void button1_Click(object sender, EventArgs e)
@@ -62,6 +79,7 @@ namespace PortalWSClient
                     if (names.Any())
                     {
                         textBoxInput.Text = openFileDialog1.FileName;
+                        textBoxFolder.Text = Path.GetDirectoryName(openFileDialog1.FileName);
                         textBoxProgres.Text = $"0/{names.Count}";
                         checkRequirements();
                     }
@@ -107,7 +125,6 @@ namespace PortalWSClient
 
         private void backgroundWorker1_DoWork(object sender, System.ComponentModel.DoWorkEventArgs e)
         {
-
             BackgroundWorker worker = sender as BackgroundWorker;
             var count = 0;
 
@@ -118,10 +135,18 @@ namespace PortalWSClient
                 {
                     var prenume = splits[0];
                     var nume = splits[1];
-                    var rezultate = FindDosareByName(prenume, nume);
-                    if (rezultate != null)
+                    var rezultat = FindDosareByName(prenume, nume);
+                    if (rezultat != null)
                     {
-                        File.WriteAllText($@"C:\temp\{prenume} {nume}.json", rezultate);
+                        if (rezultat.Error != null)
+                        {
+                            errors.Add($"Nume cautat: {name} -> Erori: {rezultat.Error}");
+                        }
+                        else
+                        {
+                            File.WriteAllText(Path.Combine(textBoxFolder.Text, $"{prenume} {nume}.json"), rezultat.Json);
+                            countJson++;
+                        }
                     }
                 }
                 count++;
@@ -136,8 +161,28 @@ namespace PortalWSClient
 
         private void backgroundWorker1_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e)
         {
+            var log = $"log-{DateTime.Now:ddMMyyyyHHmmss}.txt";
+            if (errors.Count > 0)
+            {
+                File.WriteAllLines(Path.Combine(textBoxFolder.Text, log), errors.ToArray());
+            }
             buttonStart.Enabled = true;
-            MessageBox.Show("Gata! Verifica folder-ul!");
+            var text = "Gata!";
+            if (countJson > 0)
+            {
+                text += $" Am gasit {countJson} persoane cu dosare.";
+            }
+            if (errors.Count > 0)
+            {
+                text += $" {errors.Count} cautari au generat erori. Verifica log {log}";
+            }
+            if (countJson == 0 && errors.Count == 0)
+            {
+                text += " Nu am gasit nicio persoana cu dosare.";
+            }
+            MessageBox.Show(text);
+            errors.Clear();
+            countJson = 0;
         }
     }
 }
