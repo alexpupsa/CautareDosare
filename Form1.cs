@@ -25,10 +25,12 @@ namespace PortalWSClient
         private List<string> names = new List<string>();
         private List<string> errors = new List<string>();
         private int countJson = 0;
+        private string[] PartiExcluse = { "Contestator", "Intervenient în nume propriu", "Petent", "Reclamant" };
 
         public Form1()
         {
             InitializeComponent();
+            LoadPartiExcluse();
         }
 
 
@@ -43,7 +45,7 @@ namespace PortalWSClient
 
                 foreach (var dosar in dosare)
                 {
-                    var found = dosar.parti.Any(x => x.nume.ToLower().Contains(lastName.ToLower()) && x.nume.ToLower().Contains(firstName.ToLower()));
+                    var found = dosar.parti.Any(x => !PartiExcluse.Contains(x.calitateParte) && x.nume.ToLower().Contains(lastName.ToLower()) && x.nume.ToLower().Contains(firstName.ToLower()));
                     if (found)
                     {
                         results.Add(dosar);
@@ -183,6 +185,22 @@ namespace PortalWSClient
             MessageBox.Show(text);
             errors.Clear();
             countJson = 0;
+        }
+
+        private void LoadPartiExcluse()
+        {
+            try
+            {
+                var lines = File.ReadAllLines("parti-excluse.txt");
+                if(lines.Any())
+                {
+                    PartiExcluse = lines.Select(x => x.Trim()).ToArray();
+                }
+            }
+            catch
+            {
+
+            }
         }
     }
 }
